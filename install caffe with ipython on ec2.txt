@@ -1,0 +1,178 @@
+# Instructions mainly from https://github.com/BVLC/caffe/wiki/Install-Caffe-on-EC2-from-scratch-(Ubuntu,-CUDA-7,-cuDNN), with some tweaks
+
+# 0. create AWS GPU g2.2xlarge with ubuntu instance, use defaul IAM role, add storage to be 30G (or more if you are willing to pay)
+# if you make a new key pair
+sudo chmod 400 XXX.pem
+
+# ssh into your instance
+ssh -i XXX.pem ubuntu@XXXXXXX(your instance public DNS)
+ 
+================================================================================
+# 1. Installing the NVIDIA Drivers
+sudo apt-get update && sudo apt-get upgrade
+sudo apt-get install build-essential
+
+# download cuda
+wget http://developer.download.nvidia.com/compute/cuda/7_0/Prod/local_installers/cuda_7.0.28_linux.run
+
+# Extract all the installers:
+chmod +x cuda_7.0.28_linux.run
+mkdir nvidia_installers
+./cuda_7.0.28_linux.run -extract=`pwd`/nvidia_installers
+
+sudo apt-get install linux-image-extra-virtual
+
+# now disable nouveau since it conflicts with NVIDIA's kernel module
+sudo nano /etc/modprobe.d/blacklist-nouveau.conf
+
+# add the following to the file:
+blacklist nouveau
+blacklist lbm-nouveau
+options nouveau modeset=0
+alias nouveau off
+alias lbm-nouveau off
+
+# ctrl+x to save and exit file
+
+# enable the settings you just edit and reboot
+echo options nouveau modeset=0 | sudo tee -a /etc/modprobe.d/nouveau-kms.conf
+sudo update-initramfs -u
+sudo reboot
+
+# After the reboot is complete
+sudo apt-get install linux-source
+sudo apt-get install linux-headers-`uname -r`
+
+# Install the driver
+cd nvidia_installers
+sudo ./NVIDIA-Linux-x86_64-346.46.run
+
+# Yes and OK to everything
+
+# Check that installed the GPU
+nvidia-smi
+
+================================================================================
+# 2. Installing CUDA
+
+sudo modprobe nvidia
+sudo apt-get install build-essential
+sudo ./cuda-linux64-rel-7.0.28-19326674.run
+sudo ./cuda-samples-linux-7.0.28-19326674.run
+
+# press "q" and accept the terms, "yes" to all
+
+# edit ~/.bashrc
+sudo nano ~/.bashrc
+
+# add the following
+export PATH=$PATH:/usr/local/cuda-7.0/bin
+export LD_LIBRARY_PATH=:/usr/local/cuda-7.0/lib64
+
+# execute the settings you just add
+source ~/.bashrc
+sudo ldconfig
+
+================================================================================
+# 3. Installing cuDNN
+
+# From: https://developer.nvidia.com/cudnn, download cudnn-7.0-linux-x64-v3.0-prod.tgz.
+# You can't wget to download here, have to fill the survey to download. Then upload to EC2
+# scp -i XXX.pem ~/cudnn-7.0-linux-x64-v3.0-prod.tgz ubuntu@(your ec2 public dns):
+
+# unzip the installer
+cd ~
+tar -zxf cudnn-7.0-linux-x64-v3.0-prod.tgz
+cd cuda
+sudo cp lib64/* /usr/local/cuda/lib64/
+sudo cp include/cudnn.h /usr/local/cuda/include/
+
+================================================================================
+# 4. Installing Anaconda and dependencies
+# install dependencies
+cd ~
+sudo apt-get install -y libprotobuf-dev libleveldb-dev libsnappy-dev libopencv-dev libboost-all-dev libhdf5-serial-dev protobuf-compiler gfortran libjpeg62 libfreeimage-dev libatlas-base-dev git libgoogle-glog-dev libbz2-dev libxml2-dev libxslt-dev libffi-dev libssl-dev libgflags-dev liblmdb-dev
+
+# wget anaconda and install
+wget https://3230d63b5fc54e62148e-c95ac804525aac4b6dba79b00b39d1d3.ssl.cf1.rackcdn.com/Anaconda2-2.5.0-Linux-x86_64.sh
+bash Anaconda2-2.5.0-Linux-x86_64.sh
+
+# yes to add anaconda to PATH
+
+================================================================================
+# 5. Installing Caffe
+
+# git clone caffe
+cd ~
+git clone https://github.com/BVLC/caffe.git
+
+# important! don't miss this step
+sudo nano ~/.bashrc
+
+# add the following
+export PYTHONPATH=:~/caffe/python
+
+# execute the settings you just add
+source ~/.bashrc
+sudo ldconfig
+
+# install some packages. some already installed packages in anaconda will be downgraded. not sure if this step is necessary
+cd caffe
+cat python/requirements.txt | xargs -L 1 conda install
+
+# Now edit Makefile.config. either copy the contents or directly upload Makefile.config (in the same folder of this file)
+sudo nano Makefile.config
+# scp -i XXX.pem ~/Makefile.config ubuntu@(your ec2 public dns):
+
+# a stupid thing to make caffe work
+cd /usr/lib/x86_64-linux-gnu/
+sudo cp libhdf5_hl.so.7 libhdf5_hl.so.10
+sudo cp libhdf5.so.7 libhdf5.so.10
+cd ~/caffe
+
+# Finally, compile caffe,the number after -j should be your  the number of CPU threads (or cores) on your machine. Use the command htop to check how many CPU threads you have.
+make pycaffe -j8
+make all -j8
+make test -j8
+
+# you may also run the tests
+make runtest -j8
+
+================================================================================
+# 6. Configure ipython and tunnel to local
+
+# create config file. you should use "ipython profile create" if using older version of anaconda or ipython and modify th generated config accordingly
+jupyter notebook --generate-config
+sudo nano ~/.jupyter/jupyter_notebook_config.py
+
+# add the following to the config file:
+c = get_config()
+ 
+c.NotebookApp.ip = '*'
+c.NotebookApp.open_browser = False
+c.NotebookApp.port = 42424 
+# this make sure your ipython always run on port 42424. you can use any unused port
+
+# to make ipython notebook able to create new file
+sudo chmod ugo+rwx /home/ubuntu/.local/share/
+
+# follow instructions on:
+# http://docs.aws.amazon.com/ElasticMapReduce/latest/DeveloperGuide/emr-connect-master-node-proxy.html
+# to set up proxy for your web browser to open tunnel to ec2 instance. The xml file is in the same directory of this file. 
+# You only need to do this once
+
+# now open ipython notebook on ec2. DO NOT run this in you home directory. CREATE a new directory to run notebook
+ipython notebook
+
+# open another terminal on your local and open a tunnel to your ec2
+ssh -i XXX.pem -N -L 8157:(your ec2 public dns):42424 ubuntu@(your ec2 public dns)
+# 8157 is the port on your local which is configured in your browser proxy. 42424 is the port of ipython running on ec2
+
+# Finally type in "localhost:8157" on your local web browser to connect to ec2 ipython notebook. Enjoy!
+
+# to start, you may download an example to your notebook directory
+wget https://raw.githubusercontent.com/BVLC/caffe/master/examples/01-learning-lenet.ipynb
+
+
+
+

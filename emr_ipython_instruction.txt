@@ -1,0 +1,45 @@
+1. start cluster
+
+2. install anaconda:
+wget https://3230d63b5fc54e62148e-c95ac804525aac4b6dba79b00b39d1d3.ssl.cf1.rackcdn.com/Anaconda2-2.5.0-Linux-x86_64.sh
+bash Anaconda2-2.5.0-Linux-x86_64.sh
+source .bashrc
+
+3. run: 
+jupyter notebook --generate-config
+sudo nano ~/.jupyter/jupyter_notebook_config.py
+
+add the following to the first line:
+c = get_config()
+ 
+c.NotebookApp.ip = '*'
+c.NotebookApp.open_browser = False
+c.NotebookApp.port = 42424 
+
+then: ctrl-x to quit and save the file
+This set 42424 to be the ipython port
+
+4. follow instructions on:
+http://docs.aws.amazon.com/ElasticMapReduce/latest/DeveloperGuide/emr-connect-master-node-proxy.html
+
+This is to configure proxy setting on your web browser
+
+5. run this to open tunnel to your emr: 
+ssh -i ~/mykeypair.pem -N -L 8157:ec2-###-##-##-###.compute-1.amazonaws.com:42424 hadoop@ec2-###-##-##-###.compute-1.amazonaws.com
+
+replace ~/mykeypair.pem by your pem file and replace ec2-###-##-##-###.compute-1.amazonaws.com by your emr instance
+
+(http://docs.aws.amazon.com/ElasticMapReduce/latest/DeveloperGuide/emr-ssh-tunnel-local.html)
+
+For windows users:
+in Putty:
+Tunnel: use local port 8157, destination should be like ec2-54-148-30-157.us-west-2.compute.amazonaws.com:42424, with the port where ipython is running, usually 8888 or whatver you specify in step 2. 
+
+
+6. ssh or putty to your emr:
+ssh -i /path/my-key-pair.pem ec2-user@ec2-198-51-100-1.compute-1.amazonaws.com
+
+on emr run: IPYTHON_OPTS=notebook pyspark
+
+open web browser on local and use localhost:8157 to connect to notebook remotely
+
