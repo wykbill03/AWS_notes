@@ -1,0 +1,5 @@
+IPYTHON_OPTS=notebook pyspark --driver-memory 8G --executor-memory 8G
+
+spark-submit \
+  --executor-memory 20G \
+  --total-executor-cores 100 \
