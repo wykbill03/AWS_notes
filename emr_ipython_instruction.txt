@@ -40,6 +40,7 @@ Tunnel: use local port 8157, destination should be like ec2-54-148-30-157.us-wes
 ssh -i /path/my-key-pair.pem ec2-user@ec2-198-51-100-1.compute-1.amazonaws.com
 
 on emr run: IPYTHON_OPTS=notebook pyspark
+for spark 2.0, run: PYSPARK_DRIVER_PYTHON=ipython PYSPARK_DRIVER_PYTHON_OPTS='notebook' pyspark
 
 open web browser on local and use localhost:8157 to connect to notebook remotely
 
